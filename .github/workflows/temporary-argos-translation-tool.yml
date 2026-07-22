@@ -1,7 +1,7 @@
 name: Temporary Argos translation tool
 
 on:
-  push:
+  pull_request:
     branches: [master]
 
 permissions:
@@ -27,10 +27,8 @@ jobs:
           cat > translate_cli.py <<'PY'
           import argparse
           import os
-          import sys
           import tempfile
           from pathlib import Path
-
           import argostranslate.package
           import argostranslate.translate
 
@@ -40,7 +38,6 @@ jobs:
               parser.add_argument('--input', required=True)
               parser.add_argument('--output', required=True)
               args = parser.parse_args()
-
               data_dir = Path(tempfile.mkdtemp(prefix='argos-data-'))
               os.environ['XDG_DATA_HOME'] = str(data_dir)
               argostranslate.package.install_from_path(args.model)
