@@ -1,0 +1,66 @@
+name: Temporary Argos translation tool
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build standalone translator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install argostranslate pyinstaller
+          curl -L --fail --retry 3 \
+            https://github.com/LibreTranslate/LibreTranslate-Models/raw/refs/heads/main/es_en.argosmodel \
+            -o es_en.argosmodel
+          cat > translate_cli.py <<'PY'
+          import argparse
+          import os
+          import sys
+          import tempfile
+          from pathlib import Path
+
+          import argostranslate.package
+          import argostranslate.translate
+
+          def main() -> int:
+              parser = argparse.ArgumentParser()
+              parser.add_argument('--model', required=True)
+              parser.add_argument('--input', required=True)
+              parser.add_argument('--output', required=True)
+              args = parser.parse_args()
+
+              data_dir = Path(tempfile.mkdtemp(prefix='argos-data-'))
+              os.environ['XDG_DATA_HOME'] = str(data_dir)
+              argostranslate.package.install_from_path(args.model)
+              source = Path(args.input).read_text(encoding='utf-8')
+              translated = argostranslate.translate.translate(source, 'es', 'en')
+              Path(args.output).write_text(translated, encoding='utf-8')
+              return 0
+
+          if __name__ == '__main__':
+              raise SystemExit(main())
+          PY
+          pyinstaller --onefile --name argos-es-en translate_cli.py
+          mkdir artifact
+          cp dist/argos-es-en artifact/
+          cp es_en.argosmodel artifact/
+          sha256sum artifact/* > artifact/SHA256SUMS
+      - name: Upload translator artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: argos-es-en-standalone
+          path: artifact
+          compression-level: 0
+          retention-days: 1
